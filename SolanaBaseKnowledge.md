@@ -1,21 +1,25 @@
 ## Account Model
-1. Solana采用账户模型，Address->AccountInfo的Key->Value数据存储方式，其中，每个账户最多存储10MB 的数据（可执行的代码Code或者 状态数据）。
-2. 账户需要预存代币，和数据存储量成正比，预存的代币作为数据存储的抵押物，在账户销户的时候会进行退款。
-3. 每个账户都拥有一个Owner,只有当前程序的Owner才能更新数据或者转账操作。
-4. Solana 智能合约(Programs)是无状态的存储在账户中的可执行Code,内部逻辑函数被称为Instructions,构建交易需要执行ProgramID 和 内部函数以及函数输入。智能合约作为Programs挂载在账户下，因此内部的数据块可以被具有更新权限的账户更新。
-5. 数据账户由Programs创建，是用于存储和管理程序状态的账户。
+1. Solana 有三种账户类型：a. Data accounts: System-Ownered EOA 账户，PDA（Program derived Address）EOA 衍生的地址。 b .智能合约System Program c. Native account: 硬编码的程序，例如System，Token，Stake，Vote
+2. Solana采用账户模型，Address->AccountInfo的Key->Value数据存储方式，其中，每个账户最多存储10MB 的数据（可执行的代码Code或者 状态数据）。
+3. 账户需要预存代币，和数据存储量成正比，预存的代币作为数据存储的抵押物，在账户销户的时候会进行退款。
+4. 每个账户都拥有一个Owner,只有当前程序的Owner才能更新数据或者转账操作。
+5. Programs 就是 Solana 智能合约，是无状态的可执行Code，全部状态数据存储在独立的数据账号。内部逻辑函数被称为Instructions,构建交易需要执行ProgramID 和 内部函数以及函数输入。智能合约作为Programs挂载在账户下，因此内部的数据块可以被具有更新权限的账户更新。
 ![image](https://hackmd.io/_uploads/H1g_AHjOR.png)
-4. Native program硬编码到Solan源码，作为 Validator程序的一部分并且提供整个网络的部分核心功能，当在Solane网络开发时，至少需要和 两个NativeProgram（System Program, BPF Loader）交互
-a. System Program: 带有特殊权限的智能合约。所有新账户的Owner都是SystemProgram(只有System Program可以创建新的账户)，分配数据账户的数据存储空间以及转移数据账户的Owner（自定义账户的权限），执行EOA账户的balance transfer交易（Solana链上的转账也是通过System Program 合约执行的）。
+6. Native program硬编码到Solan源码，作为 Validator程序的一部分并且提供整个网络的部分核心功能，当在Solane网络开发时，至少需要和 两个NativeProgram（System Program, BPF Loader）交互.
+7. Program accounts
+a. System Program: 带有特殊权限的智能合约。所有新账户的Owner都是SystemProgram(只有System Program可以创建新的账户)，分配数据账户的数据存储空间以及转移数据账户的Owner（自定义账户的权限），执行EOA账户的balance transfer交易（Solana链上的转账也是通过System Program 合约执行的）.
+
 b. 为了完成 EOA transfer操作，System Program 合约定义了 transfer endpoint，endpoint需要 from，to,lamports参数。检查from地址是否通过 is_signer签名交易，双边账户是否 is_writable 允许更新余额状态。完成校验后，作为EOA 账户的Owner，removes from余额，增加to余额。
+
 c. 增加账户余额不需要限制条件。因此，from账户的Owner必须是System Program（涉及账户余额的消减），但是to地址的Owner可以是任意Program。
+
 d. EOA 钱包地址（SystemAccount）的Owner是System Program,内部不存储任何可执行Code, Lamports的值就是钱包余额的大小,只有EOA地址可以发起交易并付费GasFee
 ![image](https://hackmd.io/_uploads/SkexVtid0.png)
 
-
 ### Account
 1. 账户都是通过System program 创建（EOA的Owner就是System Program，其余智能合约Programs的Owner可以转移Owner）。创建账户一般需要两步：Create&Initialize。新创建的账户内部初始化一定的存储size 和 rent banlace. 
-2. 创建账户一般有两种方式：create&initialize的Instructions组合 或者 CPI Instructions。
+2. 在每轮epoch以及 处在当前交易时都会去计算当前的rentFee(如果当前余额小于RentFee的话，该账户会被destroyed，状态数据被销毁)
+3. 创建账户一般有两种方式：create&initialize的Instructions组合 或者 CPI Instructions。
 a. 组合，create 和 initialize 是独立的两个instruction，两者之间的数据不互通
 ![image](https://hackmd.io/_uploads/BkAT1EwFC.png)
 b. 通过CPI（Cross-Program Invocations）完成一个instruction中一个program直接call另一个program的组合。因此，两者的数据互通，在进行初始化的时候，如果账户已经被初始化过的话，会因为执行了数据的修改导致整个交易失败回滚，因此不用单独执行初始化的校验工作。
